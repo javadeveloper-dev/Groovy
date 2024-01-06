@@ -1,0 +1,74 @@
+pipeline {
+    agent any
+
+    stages {
+        stage('Connect to On-Premises Active Directory') {
+            steps {
+                script {
+                    def adServer = 'your_ad_server'
+                    def adUsername = 'your_ad_username'
+                    def adPassword = 'your_ad_password' // Consider using Jenkins credentials for better security
+
+                    // PowerShell script to connect to on-premises Active Directory
+                    def powershellScript = """
+                    \$password = ConvertTo-SecureString "$adPassword" -AsPlainText -Force
+                    \$credential = New-Object System.Management.Automation.PSCredential ("$adUsername", \$password)
+                    Import-Module ActiveDirectory
+                    Connect-ADServiceAccount -Server "$adServer" -Credential \$credential
+                    """
+
+                    // Execute PowerShell script using PowerShell step
+                    def powershellStep = powershell(returnStdout: true, script: powershellScript)
+                    def result = powershellStep.trim()
+
+                    // Check if the connection was successful
+                    if (result.contains("Connected")) {
+                        echo "Connected to on-premises Active Directory"
+                    } else {
+                        error "Failed to connect to on-premises Active Directory"
+                    }
+                }
+            }
+        }
+         // Add more stages for Active Directory operations here
+         stage('Create User in Active Directory') {
+            steps {
+                script {
+                    def existingUsername = "${params.EXISTING_USERNAME}"
+                    def newUsername = "${params.NEW_USERNAME}"
+                    def newUserPassword = "${params.NEW_USER_PASSWORD}"
+
+                    // PowerShell script to copy user in Active Directory
+                    def powershellScript = """
+                    Import-Module ActiveDirectory
+                    # Retrieve the existing user
+                    \$user = Get-ADUser -Identity $existingUsername -Properties *
+
+                    # Create a new user based on the existing user attributes
+                    \$newUserParams = @{
+                        SamAccountName = "$newUsername"
+                        GivenName = \$user.GivenName
+                        Surname = \$user.Surname
+                        UserPrincipalName = \$user.UserPrincipalName
+                        DisplayName = \$user.DisplayName
+                        EmailAddress = \$user.EmailAddress
+                        AccountPassword = (ConvertTo-SecureString "$newUserPassword" -AsPlainText -Force)
+                        Enabled = \$true
+                    }
+                    New-ADUser @newUserParams
+                    """
+
+                    // Execute PowerShell script using PowerShell step
+                   // def powershellStep = powershell(returnStdout: true, script: powershellScript)
+                   // def result = powershellStep.trim()
+
+                   // Check if the user creation was successful
+                   // if (result.contains("successfully")) {
+                   //    echo "User created successfully: $newUsername"
+                   // } else {
+                   //    error "Failed to create user: $newUsername"
+                   }
+                }
+            }
+         }
+}
